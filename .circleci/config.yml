@@ -1,0 +1,26 @@
+version: 2.1
+
+jobs:
+  build-and-test:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install package with dev dependencies
+          command: pip install -e ".[dev]"
+      - run:
+          name: Run tests
+          command: pytest -v --junitxml=test-results/junit.xml
+      - store_test_results:
+          path: test-results
+
+workflows:
+  build-test:
+    jobs:
+      - build-and-test:
+          filters:
+            branches:
+              only:
+                - main
+                - /^feature\/.*/
