@@ -2,11 +2,16 @@ from pathlib import Path
 
 import typer
 
+from jw_cicd_tools.pr import resolve_pr_number
 from jw_cicd_tools.version import resolve_version
 
 app = typer.Typer()
+
 version_app = typer.Typer()
 app.add_typer(version_app, name="version")
+
+pr_app = typer.Typer()
+app.add_typer(pr_app, name="pr")
 
 
 @version_app.command("resolve")
@@ -16,6 +21,16 @@ def resolve(
 ):
     """Resolve the package/image version from the changelog and branch."""
     typer.echo(resolve_version(changelog, branch))
+
+
+@pr_app.command("resolve")
+def pr_resolve(
+    repo: str = typer.Option(..., help="GitHub repo as 'owner/name' (e.g. jonwong84/jukebox-frontend)"),
+    branch: str = typer.Option(..., help="Current branch name (e.g. $CIRCLE_BRANCH)"),
+    token: str = typer.Option(..., envvar="GITHUB_TOKEN", help="GitHub token; defaults to $GITHUB_TOKEN"),
+):
+    """Resolve the open PR number for a branch, or print nothing if none exists."""
+    typer.echo(resolve_pr_number(repo, branch, token))
 
 
 if __name__ == "__main__":
