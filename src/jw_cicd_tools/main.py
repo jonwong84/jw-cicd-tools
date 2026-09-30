@@ -28,9 +28,14 @@ def pr_resolve(
     repo: str = typer.Option(..., help="GitHub repo as 'owner/name' (e.g. jonwong84/jukebox-frontend)"),
     branch: str = typer.Option(..., help="Current branch name (e.g. $CIRCLE_BRANCH)"),
     token: str = typer.Option(..., envvar="GITHUB_TOKEN", help="GitHub token; defaults to $GITHUB_TOKEN"),
+    head_owner: str = typer.Option(
+        None,
+        help="Owner of the source branch, if different from --repo's owner "
+        "(needed for fork-based PRs). Defaults to --repo's own owner.",
+    ),
 ):
     """Resolve the open PR number for a branch, or print nothing if none exists."""
-    typer.echo(resolve_pr_number(repo, branch, token))
+    typer.echo(resolve_pr_number(repo, branch, token, head_owner=head_owner))
 
 
 if __name__ == "__main__":
