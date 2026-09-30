@@ -15,8 +15,41 @@ jobs:
       - store_test_results:
           path: test-results
 
+  tag-release:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install jw-cicd-tools (self — dogfoods its own version resolve)
+          command: pip install -e .
+      - run:
+          name: Resolve and tag release version
+          command: |
+            # On main, with a properly finalized (dated, not Unreleased)
+            # changelog entry, this returns a clean "X.Y.Z" — the same
+            # convention every consuming repo already relies on. If the
+            # changelog wasn't finalized before merging, this raises
+            # ChangelogError and the job fails loudly, the same way it
+            # would for any other repo using this tool.
+            VERSION=$(jw_cicd version resolve --changelog CHANGELOG.md --branch "$CIRCLE_BRANCH")
+            echo "Resolved version: $VERSION"
+
+            git fetch --tags
+            if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+              echo "Tag v$VERSION already exists — nothing to do."
+              exit 0
+            fi
+
+            git config user.name "CircleCI"
+            git config user.email "ci@users.noreply.github.com"
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+            # Token-authenticated push, since the default checkout auth is
+            # typically read-only and doesn't include tag-push rights.
+            git push "https://${GITHUB_TOKEN}@github.com/jonwong84/jw-cicd-tools.git" "v$VERSION"
+
 workflows:
-  build-test:
+  build-test-tag:
     jobs:
       - build-and-test:
           filters:
@@ -24,3 +57,11 @@ workflows:
               only:
                 - main
                 - /^feature\/.*/
+      - tag-release:
+          context: global-v1
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only:
+                - main
