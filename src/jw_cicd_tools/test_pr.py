@@ -9,6 +9,7 @@ from jw_cicd_tools.pr import GitHubApiError, resolve_pr_number
 
 
 def _make_response(payload: object) -> MagicMock:
+    """Build a mock context-managed HTTP response containing JSON bytes."""
     response = MagicMock()
     response.__enter__.return_value = response
     response.__exit__.return_value = False
@@ -27,6 +28,7 @@ def _requested_head(mock_urlopen) -> str:
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_returns_number_when_open_pr_exists(mock_urlopen):
+    """Verify an open PR's number is returned as a string."""
     mock_urlopen.return_value = _make_response([{"number": 42}])
 
     result = resolve_pr_number("jonwong84/jukebox-frontend", "feature/some-work", "tok")
@@ -36,6 +38,7 @@ def test_resolve_pr_number_returns_number_when_open_pr_exists(mock_urlopen):
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_returns_empty_string_when_no_open_pr(mock_urlopen):
+    """Verify an empty API response produces an empty string."""
     mock_urlopen.return_value = _make_response([])
 
     result = resolve_pr_number("jonwong84/jukebox-frontend", "feature/some-work", "tok")
@@ -45,6 +48,7 @@ def test_resolve_pr_number_returns_empty_string_when_no_open_pr(mock_urlopen):
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_defaults_head_owner_to_repo_owner(mock_urlopen):
+    """Verify the head filter defaults to the target repository's owner."""
     mock_urlopen.return_value = _make_response([{"number": 7}])
 
     resolve_pr_number("someorg/some-repo", "feature/x", "tok")
@@ -54,6 +58,7 @@ def test_resolve_pr_number_defaults_head_owner_to_repo_owner(mock_urlopen):
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_uses_explicit_head_owner_for_fork_prs(mock_urlopen):
+    """Verify fork PR queries use the source owner and target repository."""
     mock_urlopen.return_value = _make_response([{"number": 9}])
 
     resolve_pr_number("someorg/some-repo", "feature/x", "tok", head_owner="alice")
@@ -67,6 +72,7 @@ def test_resolve_pr_number_uses_explicit_head_owner_for_fork_prs(mock_urlopen):
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_url_encodes_special_characters_in_branch(mock_urlopen):
+    """Verify special characters in branch names survive query encoding."""
     mock_urlopen.return_value = _make_response([{"number": 3}])
 
     resolve_pr_number("jonwong84/jukebox-frontend", "feature/a#b&c", "tok")
@@ -78,6 +84,7 @@ def test_resolve_pr_number_url_encodes_special_characters_in_branch(mock_urlopen
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_raises_github_api_error_on_http_error(mock_urlopen):
+    """Verify HTTP failures raise GitHubApiError with the status code."""
     mock_urlopen.side_effect = urllib.error.HTTPError(
         url="https://api.github.com/repos/jonwong84/jukebox-frontend/pulls",
         code=401,
@@ -92,6 +99,7 @@ def test_resolve_pr_number_raises_github_api_error_on_http_error(mock_urlopen):
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_raises_github_api_error_on_timeout(mock_urlopen):
+    """Verify socket timeouts raise GitHubApiError with the timeout message."""
     mock_urlopen.side_effect = TimeoutError("timed out")
 
     with pytest.raises(GitHubApiError, match="timed out"):
@@ -100,6 +108,7 @@ def test_resolve_pr_number_raises_github_api_error_on_timeout(mock_urlopen):
 
 @patch("jw_cicd_tools.pr.urllib.request.urlopen")
 def test_resolve_pr_number_passes_finite_timeout_to_urlopen(mock_urlopen):
+    """Verify the HTTP request receives a positive timeout value."""
     mock_urlopen.return_value = _make_response([{"number": 1}])
 
     resolve_pr_number("jonwong84/jukebox-frontend", "feature/x", "tok")
