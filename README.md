@@ -68,7 +68,7 @@ open PR exists yet.
 
 If the GitHub API request itself fails (bad token, rate limit, network
 issue), the command raises `GitHubApiError` and exits non-zero — a real
-failure is never silently treated the same as "no open PR found." 
+failure is never silently treated the same as "no open PR found."
 
 ## Development
 
