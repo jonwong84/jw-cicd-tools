@@ -37,16 +37,31 @@ jobs:
 
             git fetch --tags
             if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-              echo "Tag v$VERSION already exists — nothing to do."
+              echo "Tag v$VERSION already exists locally — nothing to do."
               exit 0
             fi
 
             git config user.name "CircleCI"
             git config user.email "ci@users.noreply.github.com"
             git tag -a "v$VERSION" -m "Release v$VERSION"
-            # Token-authenticated push, since the default checkout auth is
-            # typically read-only and doesn't include tag-push rights.
-            git push "https://${GITHUB_TOKEN}@github.com/jonwong84/jw-cicd-tools.git" "v$VERSION"
+
+            # A concurrent tag-release run can pass the existence check
+            # above (both jobs fetch before either pushes) and then race
+            # to push — git rejects the second push since tag refs aren't
+            # meant to move. That rejection isn't a real failure here: the
+            # release is published either way. Only treat this specific
+            # case as success; a genuine auth or network failure on push
+            # still fails the job.
+            if git push "https://${GITHUB_TOKEN}@github.com/jonwong84/jw-cicd-tools.git" "v$VERSION" 2>push_error.log; then
+              echo "Pushed tag v$VERSION"
+            elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+              echo "Tag v$VERSION was already published by a concurrent job — treating as success."
+              cat push_error.log
+            else
+              echo "Failed to push tag v$VERSION, and it does not exist on the remote:" >&2
+              cat push_error.log >&2
+              exit 1
+            fi
 
 workflows:
   build-test-tag:
