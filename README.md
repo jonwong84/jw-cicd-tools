@@ -9,7 +9,7 @@ Not tied to any one project — install and use from any repo's `config.yml`.
 ## Install
 
 ```bash
-pip install git+https://github.com/<you>/jw-cicd-tools.git@v0.2.0
+pip install git+https://github.com/<you>/jw-cicd-tools.git@v0.3.0
 ```
 
 ## Usage
@@ -48,6 +48,27 @@ just a date, so the tool can tell whether it's safe to build a beta of it:
 - **On `main`**, the top entry must carry a real release date, not
   `Unreleased` — the tool raises a `ChangelogError` if you try to merge
   without finalizing the changelog first.
+
+### PR resolution (added in v0.3.0)
+
+```bash
+jw_cicd pr resolve --repo jonwong84/jukebox-frontend --branch "$CIRCLE_BRANCH"
+```
+
+Resolves the number of the open PR for a branch, or prints nothing if no
+open PR exists yet.
+
+- `--repo` is `owner/name` — this is what makes the command reusable across
+  every repo, not just one.
+- `--branch` is typically `$CIRCLE_BRANCH`.
+- `--token` defaults to reading `$GITHUB_TOKEN` from the environment, so it
+  usually doesn't need to be passed explicitly. Reading it from the
+  environment rather than accepting it only as a CLI flag avoids the token
+  showing up in process-list output (`ps aux`) on some systems.
+
+If the GitHub API request itself fails (bad token, rate limit, network
+issue), the command raises `GitHubApiError` and exits non-zero — a real
+failure is never silently treated the same as "no open PR found."
 
 ## Development
 
