@@ -12,8 +12,8 @@ class GitHubApiError(RuntimeError):
 
 
 def resolve_pr_number(repo: str, branch: str, token: str, head_owner: str | None = None) -> str:
-    """Resolve the number of the open PR for `branch` in `repo`, or an
-    empty string if no open PR exists for that branch.
+    """Return the first matching open PR number from GitHub for `branch`
+    in `repo`, as a string, or an empty string if no open PR is found.
 
     `repo` is "owner/name" (e.g. "jonwong84/jukebox-frontend") — the
     repository being searched. `branch` is typically $CIRCLE_BRANCH.
@@ -22,11 +22,14 @@ def resolve_pr_number(repo: str, branch: str, token: str, head_owner: str | None
     opened from a fork, this is the contributor's account, not
     necessarily the target repo's owner, so it defaults to the target
     repo's own owner (correct for same-repo branches, which is the
-    common case) but can be overridden for fork-based PRs.
+    common case) but can be overridden for fork-based PRs. An empty
+    `head_owner` also falls back to the target repo's owner.
 
-    Uses only the standard library (json, urllib) deliberately, so this
-    works unmodified on any CI image with Python installed — no extra
-    package install step required, unlike e.g. jq on a minimal image.
+    Queries GitHub with a 10-second timeout for blocking socket operations.
+    Raises GitHubApiError for HTTP errors, URL errors, and timeouts;
+    these failures do not return an empty string. Response decoding errors
+    (json.JSONDecodeError, UnicodeDecodeError) and errors accessing an
+    unexpected response structure (KeyError, TypeError) propagate unchanged.
     """
     repo_owner = repo.split("/", 1)[0]
     owner = head_owner or repo_owner
