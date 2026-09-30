@@ -34,7 +34,10 @@ def pr_resolve(
         "(needed for fork-based PRs). Defaults to --repo's own owner.",
     ),
 ):
-    """Resolve the open PR number for a branch, or print nothing if none exists."""
+    """Print the first matching open PR number, or a blank line if none exists.
+
+    Errors from resolve_pr_number propagate without printing a result.
+    """
     typer.echo(resolve_pr_number(repo, branch, token, head_owner=head_owner))
 
 
