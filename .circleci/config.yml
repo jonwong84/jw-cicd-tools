@@ -15,8 +15,59 @@ jobs:
       - store_test_results:
           path: test-results
 
+  tag-release:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install jw-cicd-tools (self — dogfoods its own version resolve)
+          command: pip install -e .
+      - run:
+          name: Resolve and tag release version
+          command: |
+            # On main, with a properly finalized (dated, not Unreleased)
+            # changelog entry, this returns a clean "X.Y.Z" — the same
+            # convention every consuming repo already relies on. If the
+            # changelog wasn't finalized before merging, this raises
+            # ChangelogError and the job fails loudly, the same way it
+            # would for any other repo using this tool.
+            VERSION=$(jw_cicd version resolve --changelog CHANGELOG.md --branch "$CIRCLE_BRANCH")
+            echo "Resolved version: $VERSION"
+
+            # Check origin directly rather than a local tag ref — `git
+            # fetch --tags` doesn't prune local tags that were deleted
+            # from the remote, so a stale local ref could make this check
+            # report "exists" when origin actually doesn't have it.
+            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+              echo "Tag v$VERSION already exists on origin — nothing to do."
+              exit 0
+            fi
+
+            git config user.name "CircleCI"
+            git config user.email "ci@users.noreply.github.com"
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+
+            # A concurrent tag-release run can pass the existence check
+            # above (both jobs fetch before either pushes) and then race
+            # to push — git rejects the second push since tag refs aren't
+            # meant to move. That rejection isn't a real failure here: the
+            # release is published either way. Only treat this specific
+            # case as success; a genuine auth or network failure on push
+            # still fails the job.
+            if git push "https://${GITHUB_TOKEN}@github.com/jonwong84/jw-cicd-tools.git" "v$VERSION" 2>push_error.log; then
+              echo "Pushed tag v$VERSION"
+            elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+              echo "Tag v$VERSION was already published by a concurrent job — treating as success."
+              cat push_error.log
+            else
+              echo "Failed to push tag v$VERSION, and it does not exist on the remote:" >&2
+              cat push_error.log >&2
+              exit 1
+            fi
+
 workflows:
-  build-test:
+  build-test-tag:
     jobs:
       - build-and-test:
           filters:
@@ -24,3 +75,11 @@ workflows:
               only:
                 - main
                 - /^feature\/.*/
+      - tag-release:
+          context: global-v1
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only:
+                - main
