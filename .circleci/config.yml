@@ -35,9 +35,12 @@ jobs:
             VERSION=$(jw_cicd version resolve --changelog CHANGELOG.md --branch "$CIRCLE_BRANCH")
             echo "Resolved version: $VERSION"
 
-            git fetch --tags
-            if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-              echo "Tag v$VERSION already exists locally — nothing to do."
+            # Check origin directly rather than a local tag ref — `git
+            # fetch --tags` doesn't prune local tags that were deleted
+            # from the remote, so a stale local ref could make this check
+            # report "exists" when origin actually doesn't have it.
+            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+              echo "Tag v$VERSION already exists on origin — nothing to do."
               exit 0
             fi
 
