@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 ALLOWED_SUBSECTIONS = (
@@ -41,6 +41,60 @@ class Changelog:
     unreleased: dict[str, list[str]]
 
 
+@dataclass
+class _ParseState:
+    in_unreleased: bool = False
+    first_h2_seen: bool = False
+    base_version: str | None = None
+    current_subsection: str | None = None
+    unreleased: dict[str, list[str]] = field(default_factory=dict)
+
+
+def _handle_h2(stripped: str, state: _ParseState) -> None:
+    if _OLD_STYLE_UNRELEASED_RE.match(stripped):
+        raise ChangelogError(
+            f"Found '{stripped}'. This heading style is no longer supported. "
+            "Rename it to '## [Unreleased]'; the version is now computed at release time."
+        )
+
+    if _UNRELEASED_HEADING_RE.match(stripped):
+        if state.first_h2_seen:
+            raise ChangelogError(
+                "## [Unreleased] must be the first release heading in CHANGELOG.md"
+            )
+        state.first_h2_seen = True
+        state.in_unreleased = True
+        state.current_subsection = None
+        return
+
+    state.first_h2_seen = True
+    state.in_unreleased = False
+    state.current_subsection = None
+
+    dated_match = _DATED_HEADING_RE.match(stripped)
+    if dated_match and state.base_version is None:
+        state.base_version = dated_match.group(1)
+
+
+def _handle_unreleased_line(stripped: str, state: _ParseState) -> None:
+    h3_match = _H3_HEADING_RE.match(stripped)
+    if h3_match:
+        section_name = h3_match.group(1).strip()
+        if section_name not in ALLOWED_SUBSECTIONS:
+            allowed_str = ", ".join(ALLOWED_SUBSECTIONS)
+            raise ChangelogError(
+                f"Unknown subsection '### {section_name}' under [Unreleased]. "
+                f"Allowed subsections are: {allowed_str}"
+            )
+        state.current_subsection = section_name
+        return
+
+    if stripped.startswith(("- ", "* ")):
+        if state.current_subsection is None:
+            raise ChangelogError("entries must be under a ### subsection")
+        state.unreleased.setdefault(state.current_subsection, []).append(stripped)
+
+
 def parse_changelog(text: str) -> Changelog:
     """Parse changelog text into a Changelog dataclass.
 
@@ -51,66 +105,19 @@ def parse_changelog(text: str) -> Changelog:
     - Subsections under `[Unreleased]` are in ALLOWED_SUBSECTIONS.
     - Any bullet under `[Unreleased]` must appear under a valid subsection.
     """
-    lines = text.splitlines()
-    in_unreleased = False
-    first_h2_bracket_seen = False
-    base_version: str | None = None
-    current_subsection: str | None = None
-    unreleased: dict[str, list[str]] = {}
+    state = _ParseState()
 
-    for line in lines:
+    for line in text.splitlines():
         stripped = line.strip()
-
-        # Check for any level-2 bracket heading: ## [...]
         if _H2_HEADING_RE.match(stripped):
-            if _OLD_STYLE_UNRELEASED_RE.match(stripped):
-                raise ChangelogError(
-                    f"Found '{stripped}'. This heading style is no longer supported. "
-                    "Rename it to '## [Unreleased]'; the version is now computed at release time."
-                )
+            _handle_h2(stripped, state)
+        elif state.in_unreleased:
+            _handle_unreleased_line(stripped, state)
 
-            if _UNRELEASED_HEADING_RE.match(stripped):
-                if first_h2_bracket_seen:
-                    raise ChangelogError(
-                        "## [Unreleased] must be the first release heading in CHANGELOG.md"
-                    )
-                first_h2_bracket_seen = True
-                in_unreleased = True
-                current_subsection = None
-                continue
-
-            first_h2_bracket_seen = True
-            in_unreleased = False
-            current_subsection = None
-
-            dated_match = _DATED_HEADING_RE.match(stripped)
-            if dated_match and base_version is None:
-                base_version = dated_match.group(1)
-            continue
-
-        if in_unreleased:
-            h3_match = _H3_HEADING_RE.match(stripped)
-            if h3_match:
-                section_name = h3_match.group(1).strip()
-                if section_name not in ALLOWED_SUBSECTIONS:
-                    allowed_str = ", ".join(ALLOWED_SUBSECTIONS)
-                    raise ChangelogError(
-                        f"Unknown subsection '### {section_name}' under [Unreleased]. "
-                        f"Allowed subsections are: {allowed_str}"
-                    )
-                current_subsection = section_name
-                continue
-
-            if stripped.startswith(("- ", "* ")):
-                if current_subsection is None:
-                    raise ChangelogError("entries must be under a ### subsection")
-                unreleased.setdefault(current_subsection, []).append(stripped)
-                continue
-
-    if base_version is None:
+    if state.base_version is None:
         raise ChangelogError("No dated version heading found in CHANGELOG.md")
 
-    return Changelog(base_version=base_version, unreleased=unreleased)
+    return Changelog(base_version=state.base_version, unreleased=state.unreleased)
 
 
 def has_entries(changelog: Changelog) -> bool:
