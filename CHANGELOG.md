@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking
+- Changelog convention: PRs now add entries under an unversioned `## [Unreleased]` heading. The old `## [X.Y.Z] - Unreleased` heading style is rejected with a migration message. The version is computed at release time from the entry types, and the heading is stamped with the version and UTC date when a change merges to `main`.
+
+### Added
+- `release stamp` command: stamps the `[Unreleased]` heading with the computed version and a release date, and inserts a fresh empty `[Unreleased]` section.
+- `release` CircleCI job on `main`: stamps the changelog, commits it with `[skip ci]`, tags the release, and pushes both atomically.
+
+### Changed
+- `version resolve` computes the next version from the entry types under `[Unreleased]`, and prints a blank line on `main` when there is nothing to release.
+- Command errors print a message and exit 1 without a traceback.
+
 ## [0.3.0] - 2026-10-01
 
 ### Added
