@@ -178,7 +178,7 @@ def stamp(text: str, version: str, date: str) -> str:
         raise ChangelogError("No entries under [Unreleased] to stamp")
 
     match = re.search(
-        r"^##\s*\\?\[unreleased\\?\][^\S\r\n]*", text, re.MULTILINE | re.IGNORECASE
+        r"^##[^\S\r\n]*\\?\[unreleased\\?\][^\S\r\n]*", text, re.MULTILINE | re.IGNORECASE
     )
     if not match:
         raise ChangelogError("No ## [Unreleased] heading found in changelog")
