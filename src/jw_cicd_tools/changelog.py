@@ -27,7 +27,7 @@ _DATED_HEADING_RE = re.compile(
     r"^##\s*(?:\\?\[)?v?(\d+\.\d+\.\d+)(?:\\?\])?\s*-\s*(\d{4}-\d{2}-\d{2})\s*$"
 )
 _H2_HEADING_RE = re.compile(r"^##\s*\\?\[")
-_H3_HEADING_RE = re.compile(r"^###\s+(.+)$")
+_H3_HEADING_RE = re.compile(r"^###\s+(\S.*)$")
 
 
 class ChangelogError(ValueError):
