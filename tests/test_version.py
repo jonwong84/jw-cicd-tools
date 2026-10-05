@@ -435,3 +435,67 @@ def test_cli_release_stamp_success_and_idempotence(tmp_path: Path):
     assert result2.exit_code == 0
     assert result2.output.strip() == ""
     assert changelog.read_text(encoding="utf-8") == content_after_first
+
+
+@pytest.mark.parametrize("opening", ["[", r"\["])
+@pytest.mark.parametrize("closing", ["]", r"\]"])
+def test_escaped_headings_parse_and_stamp(opening, closing):
+    text = (
+        f"## {opening}Unreleased{closing}\n\n"
+        "### Fixed\n- New fix\n\n"
+        f"## {opening}v1.0.0{closing} - 2026-01-01\n\n"
+        "### Updated\n- Historical entry\n"
+    )
+    parsed = parse_changelog(text)
+    assert parsed.base_version == "1.0.0"
+    assert parsed.unreleased == {"Fixed": ["- New fix"]}
+    result = stamp(text, version="1.0.1", date="2026-10-05")
+    assert result == text.replace(
+        f"## {opening}Unreleased{closing}",
+        "## [Unreleased]\n\n## [1.0.1] - 2026-10-05",
+        1,
+    )
+    assert parse_changelog(result).base_version == "1.0.1"
+    assert not has_entries(parse_changelog(result))
+
+
+@pytest.mark.parametrize("opening", ["[", r"\["])
+@pytest.mark.parametrize("closing", ["]", r"\]"])
+def test_escaped_obsolete_headings_raise(opening, closing):
+    with pytest.raises(ChangelogError, match="This heading style is no longer supported"):
+        parse_changelog(f"## {opening}v1.0.0{closing} - Unreleased\n")
+
+
+def test_escaped_unreleased_must_be_first():
+    with pytest.raises(ChangelogError, match="must be the first release heading"):
+        parse_changelog("## [1.0.0] - 2026-01-01\n" + r"## \[Unreleased\]")
+
+
+@pytest.mark.parametrize("date", ["today", "2026-1-01", "26-01-01", "2026/01/01", "2026-01-01\n", " "])
+def test_invalid_stamp_date_raises_and_cli_preserves_file(tmp_path, date):
+    with pytest.raises(ChangelogError, match="YYYY-MM-DD"):
+        stamp(CHANGELOG_WITH_UNRELEASED_ENTRIES, version="0.4.0", date=date)
+    path = _write(tmp_path, CHANGELOG_WITH_UNRELEASED_ENTRIES)
+    before = path.read_bytes()
+    result = CliRunner().invoke(
+        app, ["release", "stamp", "--changelog", str(path), "--date", date]
+    )
+    assert result.exit_code == 1
+    assert "YYYY-MM-DD" in result.stderr
+    assert "Traceback" not in result.output
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("date_args", [[], ["--date", ""]])
+def test_cli_stamp_defaults_date(tmp_path, date_args):
+    from datetime import datetime, timezone
+
+    path = _write(tmp_path, CHANGELOG_WITH_UNRELEASED_ENTRIES)
+    before = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    result = CliRunner().invoke(
+        app, ["release", "stamp", "--changelog", str(path), *date_args]
+    )
+    after = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    assert result.exit_code == 0
+    text = path.read_text(encoding="utf-8")
+    assert any(f"## [0.4.0] - {date}" in text for date in (before, after))

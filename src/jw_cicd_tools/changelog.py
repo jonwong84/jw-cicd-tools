@@ -18,14 +18,14 @@ MINOR_SUBSECTIONS = {"Added", "Changed", "Deprecated", "Removed"}
 PATCH_SUBSECTIONS = {"Fixed", "Security"}
 
 _OLD_STYLE_UNRELEASED_RE = re.compile(
-    r"^##\s*\[?v?(\d+\.\d+\.\d+)\]?\s*-\s*unreleased\s*$",
+    r"^##\s*(?:\\?\[)?v?(\d+\.\d+\.\d+)(?:\\?\])?\s*-\s*unreleased\s*$",
     re.IGNORECASE,
 )
-_UNRELEASED_HEADING_RE = re.compile(r"^##\s*\[unreleased\]\s*$", re.IGNORECASE)
+_UNRELEASED_HEADING_RE = re.compile(r"^##\s*\\?\[unreleased\\?\]\s*$", re.IGNORECASE)
 _DATED_HEADING_RE = re.compile(
-    r"^##\s*\[?v?(\d+\.\d+\.\d+)\]?\s*-\s*(\d{4}-\d{2}-\d{2})\s*$"
+    r"^##\s*(?:\\?\[)?v?(\d+\.\d+\.\d+)(?:\\?\])?\s*-\s*(\d{4}-\d{2}-\d{2})\s*$"
 )
-_H2_HEADING_RE = re.compile(r"^##\s*\[")
+_H2_HEADING_RE = re.compile(r"^##\s*\\?\[")
 _H3_HEADING_RE = re.compile(r"^###\s+(.+)$")
 
 
@@ -156,14 +156,17 @@ def stamp(text: str, version: str, date: str) -> str:
     """Rename `## [Unreleased]` to `## [<version>] - <date>` and insert a fresh
     empty `## [Unreleased]` heading above it. Everything else is preserved byte for byte.
 
-    Raises ChangelogError if [Unreleased] has no entries.
+    Raises ChangelogError if the date is not YYYY-MM-DD or [Unreleased] has no entries.
     """
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        raise ChangelogError("Release date must be in YYYY-MM-DD format")
+
     changelog = parse_changelog(text)
     if not has_entries(changelog):
         raise ChangelogError("No entries under [Unreleased] to stamp")
 
     match = re.search(
-        r"^##\s*\[unreleased\][^\S\r\n]*", text, re.MULTILINE | re.IGNORECASE
+        r"^##\s*\\?\[unreleased\\?\][^\S\r\n]*", text, re.MULTILINE | re.IGNORECASE
     )
     if not match:
         raise ChangelogError("No ## [Unreleased] heading found in changelog")
