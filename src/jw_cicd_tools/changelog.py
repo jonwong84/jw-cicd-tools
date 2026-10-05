@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
 ALLOWED_SUBSECTIONS = (
     "Added",
@@ -160,6 +161,10 @@ def stamp(text: str, version: str, date: str) -> str:
     """
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ChangelogError("Release date must be in YYYY-MM-DD format")
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError as error:
+        raise ChangelogError("Release date must be a valid YYYY-MM-DD date") from error
 
     changelog = parse_changelog(text)
     if not has_entries(changelog):

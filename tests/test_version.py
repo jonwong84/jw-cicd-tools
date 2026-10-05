@@ -471,7 +471,7 @@ def test_escaped_unreleased_must_be_first():
         parse_changelog("## [1.0.0] - 2026-01-01\n" + r"## \[Unreleased\]")
 
 
-@pytest.mark.parametrize("date", ["today", "2026-1-01", "26-01-01", "2026/01/01", "2026-01-01\n", " "])
+@pytest.mark.parametrize("date", ["today", "2026-1-01", "26-01-01", "2026/01/01", "2026-01-01\n", " ", "2026-13-45", "2026-02-30"])
 def test_invalid_stamp_date_raises_and_cli_preserves_file(tmp_path, date):
     with pytest.raises(ChangelogError, match="YYYY-MM-DD"):
         stamp(CHANGELOG_WITH_UNRELEASED_ENTRIES, version="0.4.0", date=date)
