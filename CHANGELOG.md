@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-06
+
 ### Breaking
 - Changelog convention: PRs now add entries under an unversioned `## [Unreleased]` heading. The old `## [X.Y.Z] - Unreleased` heading style is rejected with a migration message. The version is computed at release time from the entry types, and the heading is stamped with the version and UTC date when a change merges to `main`.
 
