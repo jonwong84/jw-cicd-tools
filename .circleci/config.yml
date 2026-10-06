@@ -15,59 +15,82 @@ jobs:
       - store_test_results:
           path: test-results
 
-  tag-release:
+  release:
     docker:
       - image: cimg/python:3.12
     steps:
       - checkout
       - run:
-          name: Install jw-cicd-tools (self — dogfoods its own version resolve)
+          name: Install jw-cicd-tools (self — dogfoods its own release logic)
           command: pip install -e .
       - run:
-          name: Resolve and tag release version
+          name: Stamp changelog, tag, and push release
           command: |
-            # On main, with a properly finalized (dated, not Unreleased)
-            # changelog entry, this returns a clean "X.Y.Z" — the same
-            # convention every consuming repo already relies on. If the
-            # changelog wasn't finalized before merging, this raises
-            # ChangelogError and the job fails loudly, the same way it
-            # would for any other repo using this tool.
-            VERSION=$(jw_cicd version resolve --changelog CHANGELOG.md --branch "$CIRCLE_BRANCH")
-            echo "Resolved version: $VERSION"
-
-            # Check origin directly rather than a local tag ref — `git
-            # fetch --tags` doesn't prune local tags that were deleted
-            # from the remote, so a stale local ref could make this check
-            # report "exists" when origin actually doesn't have it.
-            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
-              echo "Tag v$VERSION already exists on origin — nothing to do."
-              exit 0
-            fi
-
             git config user.name "CircleCI"
             git config user.email "ci@users.noreply.github.com"
-            git tag -a "v$VERSION" -m "Release v$VERSION"
+            REPO_URL="https://${GITHUB_TOKEN}@github.com/jonwong84/jw-cicd-tools.git"
 
-            # A concurrent tag-release run can pass the existence check
-            # above (both jobs fetch before either pushes) and then race
-            # to push — git rejects the second push since tag refs aren't
-            # meant to move. That rejection isn't a real failure here: the
-            # release is published either way. Only treat this specific
-            # case as success; a genuine auth or network failure on push
-            # still fails the job.
-            if git push "https://${GITHUB_TOKEN}@github.com/jonwong84/jw-cicd-tools.git" "v$VERSION" 2>push_error.log; then
-              echo "Pushed tag v$VERSION"
-            elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
-              echo "Tag v$VERSION was already published by a concurrent job — treating as success."
+            attempt=1
+            while true; do
+              # On main this prints the version that will be released, or a
+              # blank line when [Unreleased] has no entries. A ChangelogError
+              # fails the job loudly (bash runs with -e here).
+              VERSION=$(jw_cicd version resolve --changelog CHANGELOG.md --branch "$CIRCLE_BRANCH")
+              if [ -z "$VERSION" ]; then
+                echo "Nothing to release."
+                exit 0
+              fi
+              echo "Releasing version: $VERSION"
+
+              # Check origin directly rather than a local tag ref — `git
+              # fetch --tags` doesn't prune local tags that were deleted
+              # from the remote. [Unreleased] has entries here, so an
+              # existing tag for this version means something is wrong.
+              if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+                echo "Tag v$VERSION already exists on origin, but [Unreleased] still has entries." >&2
+                exit 1
+              fi
+
+              jw_cicd release stamp --changelog CHANGELOG.md >/dev/null
+              git add CHANGELOG.md
+              git commit -m "Release v$VERSION [skip ci]"
+              git tag -a "v$VERSION" -m "Release v$VERSION"
+
+              # Atomic: the stamp commit and the tag land together or not at
+              # all. This is also the first step that writes to the remote,
+              # so a ruleset rejection leaves nothing tagged or published.
+              if git push --atomic "$REPO_URL" HEAD:refs/heads/main "refs/tags/v$VERSION" 2>push_error.log; then
+                echo "Released v$VERSION"
+                exit 0
+              fi
+
+              # Rule/protection violations are not retryable. Confirm the
+              # exact GitHub error strings from the first real run.
+              if grep -qE 'GH013|GH006|protected branch|rule violations' push_error.log; then
+                echo "Push to main was rejected by a branch rule:" >&2
+                cat push_error.log >&2
+                exit 1
+              fi
+
+              if [ "$attempt" -ge 2 ]; then
+                echo "Push failed after retry:" >&2
+                cat push_error.log >&2
+                exit 1
+              fi
+
+              # main probably moved (a concurrent merge). Reset to origin and
+              # recompute once. If a concurrent job already released, then
+              # [Unreleased] is now empty and the loop exits 0 above.
+              echo "Push rejected; resetting to origin/main and retrying once."
               cat push_error.log
-            else
-              echo "Failed to push tag v$VERSION, and it does not exist on the remote:" >&2
-              cat push_error.log >&2
-              exit 1
-            fi
+              git tag -d "v$VERSION"
+              git fetch origin main
+              git reset --hard origin/main
+              attempt=$((attempt + 1))
+            done
 
 workflows:
-  build-test-tag:
+  build-test-release:
     jobs:
       - build-and-test:
           filters:
@@ -75,7 +98,7 @@ workflows:
               only:
                 - main
                 - /^feature\/.*/
-      - tag-release:
+      - release:
           context: global-v1
           requires:
             - build-and-test
