@@ -499,3 +499,19 @@ def test_cli_stamp_defaults_date(tmp_path, date_args):
     assert result.exit_code == 0
     text = path.read_text(encoding="utf-8")
     assert any(f"## [0.4.0] - {date}" in text for date in (before, after))
+
+
+def test_stamp_ignores_split_heading_decoy():
+    text = (
+        "##\n[Unreleased]\n\n"
+        "## [Unreleased]\n\n"
+        "### Added\n- New thing\n\n"
+        "## [1.0.0] - 2026-01-01\n"
+    )
+    result = stamp(text, version="1.1.0", date="2026-10-05")
+    assert result.startswith(
+        "##\n[Unreleased]\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-05"
+    )
+    parsed = parse_changelog(result)
+    assert parsed.base_version == "1.1.0"
+    assert not has_entries(parsed)
