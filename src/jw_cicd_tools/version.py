@@ -22,6 +22,11 @@ def resolve_version(changelog_path: Path, branch: str) -> str:
     - Appends a 14-digit UTC beta suffix (YYYYMMDDHHMMSS).
     - If [Unreleased] has entries, uses the computed next version.
     - If [Unreleased] has no entries, uses base patch+1 as a build identifier.
+
+    The base version comes from the first dated heading. A missing
+    [Unreleased] section counts as having no entries. Read the file as UTF-8;
+    ChangelogError from parsing or version computation, file access errors,
+    and UTF-8 decoding errors propagate to the caller.
     """
     text = changelog_path.read_text(encoding="utf-8")
     changelog = parse_changelog(text)

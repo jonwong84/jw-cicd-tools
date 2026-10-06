@@ -30,7 +30,12 @@ def resolve(
     changelog: Path = typer.Option(Path("CHANGELOG.md"), help="Path to CHANGELOG.md"),
     branch: str = typer.Option(..., help="Current branch name (e.g. $CIRCLE_BRANCH)"),
 ):
-    """Resolve the package/image version from the changelog and branch."""
+    """Resolve and print the package/image version from the changelog and branch.
+
+    Print a blank line on main when there are no unreleased entries.
+    Report ChangelogError on stderr and raise typer.Exit with code 1.
+    File access and UTF-8 decoding errors propagate unchanged.
+    """
     try:
         typer.echo(resolve_version(changelog, branch))
     except ChangelogError as error:
@@ -45,7 +50,16 @@ def stamp_command(
         None, help="Release date in YYYY-MM-DD format; defaults to UTC today"
     ),
 ):
-    """Stamp the [Unreleased] heading with the computed next version and release date."""
+    """Stamp the [Unreleased] heading with the computed next version and release date.
+
+    Rewrite the UTF-8 changelog with a fresh empty [Unreleased] section and
+    print the released version. An omitted or empty date defaults to today
+    in UTC; otherwise it must be a valid YYYY-MM-DD date. If there are no
+    unreleased entries, print a blank line without writing or validating date.
+
+    Report ChangelogError on stderr and raise typer.Exit with code 1.
+    File access and Unicode errors propagate unchanged.
+    """
     try:
         text = changelog.read_text(encoding="utf-8")
         parsed = parse_changelog(text)

@@ -51,6 +51,12 @@ class _ParseState:
 
 
 def _handle_h2(stripped: str, state: _ParseState) -> None:
+    """Update parsing state for a release heading with whitespace stripped.
+
+    Reset the current subsection, enter or leave [Unreleased], and record
+    the first dated version. Raise ChangelogError for an obsolete versioned
+    Unreleased heading or an [Unreleased] heading after another release heading.
+    """
     if _OLD_STYLE_UNRELEASED_RE.match(stripped):
         raise ChangelogError(
             f"Found '{stripped}'. This heading style is no longer supported. "
@@ -77,6 +83,11 @@ def _handle_h2(stripped: str, state: _ParseState) -> None:
 
 
 def _handle_unreleased_line(stripped: str, state: _ParseState) -> None:
+    """Select a subsection or append a stripped '- ' or '* ' bullet to state.
+
+    Raise ChangelogError for an unknown subsection or a bullet before any
+    subsection. Ignore other lines.
+    """
     h3_match = _H3_HEADING_RE.match(stripped)
     if h3_match:
         section_name = h3_match.group(1).strip()
@@ -98,12 +109,18 @@ def _handle_unreleased_line(stripped: str, state: _ParseState) -> None:
 def parse_changelog(text: str) -> Changelog:
     """Parse changelog text into a Changelog dataclass.
 
-    Validates that:
+    Return the first dated heading's version and unreleased '- ' or '* '
+    bullet lines, stripped of surrounding whitespace and grouped by subsection.
+    Missing [Unreleased] or subsections without bullets contribute no entries.
+    Heading brackets may be backslash-escaped; dates are checked for format,
+    not calendar validity.
+
+    Raise ChangelogError if any of these requirements are violated:
     - If present, `## [Unreleased]` must be the first `## [` heading.
     - Old-style `## [X.Y.Z] - Unreleased` headings raise a migration ChangelogError.
     - At least one dated heading `## [X.Y.Z] - YYYY-MM-DD` exists.
     - Subsections under `[Unreleased]` are in ALLOWED_SUBSECTIONS.
-    - Any bullet under `[Unreleased]` must appear under a valid subsection.
+    - Any '- ' or '* ' bullet under `[Unreleased]` must be under a valid subsection.
     """
     state = _ParseState()
 
@@ -133,6 +150,11 @@ def next_version(base: str, unreleased: dict[str, list[str]]) -> str:
     - Added, Changed, Deprecated, Removed give minor.
     - Fixed, Security give patch.
     - Highest bump rule wins.
+
+    Only nonempty recognized subsections count; lower version components
+    reset to zero after a major or minor bump. Raise ChangelogError if no
+    recognized subsection has entries or base is not three dot-separated
+    integers.
     """
     has_breaking = any(bool(unreleased.get(k)) for k in MAJOR_SUBSECTIONS)
     has_minor = any(bool(unreleased.get(k)) for k in MINOR_SUBSECTIONS)
@@ -161,10 +183,16 @@ def next_version(base: str, unreleased: dict[str, list[str]]) -> str:
 
 
 def stamp(text: str, version: str, date: str) -> str:
-    """Rename `## [Unreleased]` to `## [<version>] - <date>` and insert a fresh
-    empty `## [Unreleased]` heading above it. Everything else is preserved byte for byte.
+    """Return text with `## [Unreleased]` renamed to `## [<version>] - <date>`
+    and a fresh empty `## [Unreleased]` heading inserted above it.
 
-    Raises ChangelogError if the date is not YYYY-MM-DD or [Unreleased] has no entries.
+    Insert version verbatim without validating it. Preserve text outside the
+    replaced heading and its trailing whitespace. Inserted line endings use
+    CRLF if any CRLF occurs in text, otherwise LF.
+
+    Raise ChangelogError for an invalid calendar date or a date not formatted
+    as YYYY-MM-DD, invalid changelog content, no unreleased entries, or no
+    replaceable [Unreleased] heading starting at the beginning of a line.
     """
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ChangelogError("Release date must be in YYYY-MM-DD format")
