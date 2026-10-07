@@ -76,6 +76,14 @@ version number; CI computes it from `CHANGELOG.md`.
 > `## [X.Y.Z] - Unreleased` heading convention. The old style is now rejected with a
 > migration message. See [Adopting it in a repo](#adopting-it-in-a-repo).
 
+Two operating rules keep releases safe:
+
+- Only the newest commit on `main` should release. A publishing repo's `release` job
+  should skip when `main` has moved past its pipeline's commit, because a newer pipeline's
+  tree includes the older changes. If that newer pipeline fails, the older entries wait in
+  `[Unreleased]` for the next successful release.
+- After a failed release, use "Rerun workflow from failed" instead of a full rerun.
+
 ### What you do in a PR
 
 Add bullets under an unversioned `## [Unreleased]` heading at the top of `CHANGELOG.md`,
@@ -144,8 +152,9 @@ promise of a release.
 3. In repos that publish artifacts (for example container images), the publish job runs
    only after the release succeeds and uses the released version.
 
-The date is the UTC merge date, so a late-evening merge in a US time zone is dated the
-next day.
+The date is the UTC date when the release job runs, so a late-evening merge in a US time
+zone can be dated the next day. A delayed or rerun job can also be dated after the merge
+date.
 
 ### Adopting it in a repo
 
@@ -167,13 +176,15 @@ CI prerequisites:
 
 ### Known limits
 
-- Only the newest commit on `main` should release. A publishing repo's `release` job skips
-  when `main` has moved past its pipeline's commit, because a newer pipeline's tree
-  includes the older changes. If that newer pipeline fails, the older entries wait in
-  `[Unreleased]` for the next successful release.
-- After a failed release, use "Rerun workflow from failed" instead of a full rerun.
-- A check that fails a PR with no changelog entries is not implemented yet. Today a PR with
-  no entries simply releases nothing.
+- **The reference workflow does not skip stale pipelines.** After a push failure that is
+  not a branch-protection rejection, the `release` job in this repo's
+  `.circleci/config.yml` resets to `origin/main` and retries. An older pipeline can
+  therefore release newer changelog entries before the newer pipeline's tests finish.
+  That is harmless here because the only artifact is a tag. A repo that publishes
+  artifacts should add the stale-pipeline check described under
+  [Releases and versioning](#releases-and-versioning).
+- **There is no PR check for missing changelog entries yet.** A PR with no entries simply
+  releases nothing.
 
 ## Development
 
