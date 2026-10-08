@@ -8,11 +8,15 @@ Not tied to any one project — install and use from any repo's `config.yml`.
 
 ## Install
 
-Pin to a release tag:
+Pin to the commit a release tag points at, not to the tag itself. A tag can be moved,
+and CI jobs that run this tool hold repository tokens. A commit SHA cannot be moved.
 
 ```bash
-pip install git+https://github.com/jonwong84/jw-cicd-tools.git@v0.4.0
+# v0.4.0
+pip install git+https://github.com/jonwong84/jw-cicd-tools.git@d2b8915ab74ca83b5e9410181133b99ce56294b4
 ```
+
+Find a release's commit with `git rev-parse "v0.4.0^{commit}"`.
 
 ## Usage
 
@@ -78,10 +82,11 @@ version number; CI computes it from `CHANGELOG.md`.
 
 Two operating rules keep releases safe:
 
-- Only the newest commit on `main` should release. A publishing repo's `release` job
-  should skip when `main` has moved past its pipeline's commit, because a newer pipeline's
-  tree includes the older changes. If that newer pipeline fails, the older entries wait in
-  `[Unreleased]` for the next successful release.
+- Only the newest commit on `main` should release. A `release` job should skip when `main`
+  has moved past its pipeline's commit, because a newer pipeline's tree includes the older
+  changes. If that newer pipeline fails, the older entries wait in `[Unreleased]` for the
+  next successful release. The reference `release` job in this repo's
+  `.circleci/config.yml` does this.
 - After a failed release, use "Rerun workflow from failed" instead of a full rerun.
 
 ### What you do in a PR
@@ -160,7 +165,8 @@ date.
 
 In a single PR:
 
-1. Pin `jw-cicd-tools` to a release tag (for example `@v0.4.0`).
+1. Pin `jw-cicd-tools` to the commit SHA of a release tag (for example `v0.4.0`; see
+   [Install](#install)).
 2. Add `## [Unreleased]` above the top dated entry, with your entries under it. The pin and
    the heading must change together: older tool versions skip a bare `## [Unreleased]`
    heading and misread the file.
@@ -176,13 +182,6 @@ CI prerequisites:
 
 ### Known limits
 
-- **The reference workflow does not skip stale pipelines.** After a push failure that is
-  not a branch-protection rejection, the `release` job in this repo's
-  `.circleci/config.yml` resets to `origin/main` and retries. An older pipeline can
-  therefore release newer changelog entries before the newer pipeline's tests finish.
-  That is harmless here because the only artifact is a tag. A repo that publishes
-  artifacts should add the stale-pipeline check described under
-  [Releases and versioning](#releases-and-versioning).
 - **There is no PR check for missing changelog entries yet.** A PR with no entries simply
   releases nothing.
 
