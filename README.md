@@ -166,8 +166,7 @@ date.
 In a single PR:
 
 1. Pin `jw-cicd-tools` to the commit SHA of a release tag (for example `v0.4.0`; see
-   [Install](#install)). The pin and the heading must change together: older tool versions
-   skip a bare `## [Unreleased]` heading and misread the file.
+   [Install](#install)).
 2. Add `## [Unreleased]` above the top dated entry, with your entries under it. The pin and
    the heading must change together: older tool versions skip a bare `## [Unreleased]`
    heading and misread the file.
